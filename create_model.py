@@ -71,14 +71,7 @@ def create_model(all_documents_file, relevance_file,query_file):
         .merge(documents,left_on ="id", right_on="id") [["query", "position", "title", "body"]]
 
 
-    # relevance_with_values = do
-    # relevance_with_values = documents.join(query_file)
-    # print (documents)
-    # print (documents.shape)
-    # print (relevance_with_values)
-    # print (relevance_with_values[0])
-    # print (relevance_with_values.shape)
-    # exit(1)
+
 
 
 
