@@ -44,6 +44,12 @@ def cosine_similarity(x,y):
         return cos
     return 0.0
 
+def windowing(doc, query):
+    tokens_doc = str(doc).split(" ")
+    tokens_query = str(doc).split(" ")
+
+
+
 
 def stemming(tokens):
     return (PorterStemmer().stem(token) for token in analyzer(tokens))
@@ -64,21 +70,11 @@ def create_model(all_documents_file, relevance_file,query_file):
     documents = pd.read_json(all_documents_file)[["id", "title", "body"]]
     query_file = pd.read_json(query_file)[["query number","query" ]]
     relevance = pd.read_json(relevance_file)[["query_num", "position", "id"]]
-    labels = multi_label(relevance, len(documents))
+    # labels = multi_label(relevance, len(documents))
 
     relevance = pd.read_json(relevance_file)[["query_num", "position", "id"]]
     relevance_with_values = relevance.merge(query_file,left_on ="query_num", right_on="query number")[ ["id","query", "position"]]\
         .merge(documents,left_on ="id", right_on="id") [["query", "position", "title", "body"]]
-
-
-    # relevance_with_values = do
-    # relevance_with_values = documents.join(query_file)
-    # print (documents)
-    # print (documents.shape)
-    # print (relevance_with_values)
-    # print (relevance_with_values[0])
-    # print (relevance_with_values.shape)
-    # exit(1)
 
 
 
@@ -92,13 +88,12 @@ def create_model(all_documents_file, relevance_file,query_file):
 
     '''Step 2. Creating  a column for creating index'''
 
-    relevance_with_values ["all_text"] = relevance_with_values.apply( lambda x :  x["title"] + x["body"] , axis =1)
-    # relevance_with_values ["all_text"] = relevance_with_values.apply( lambda x : x["query"] + x["title"] + x["body"] , axis =1)
+    relevance_with_values ["all_text"] = relevance_with_values.apply( lambda x : x["query"] + x["title"] + x["body"] , axis =1)
 
     ''' Step 3. Creating a model for generating TF feature'''
 
     # vectorizer = TfidfVectorizer( stop_words="english", lowercase=True, norm="l2", analyzer=stemming)
-    vectorizer = TfidfVectorizer( stop_words="english", lowercase=True, norm="l2")
+    vectorizer = TfidfVectorizer( stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
     vectorizer = vectorizer.fit(relevance_with_values["all_text"])
 
 
@@ -113,6 +108,15 @@ def create_model(all_documents_file, relevance_file,query_file):
     relevance_with_values["cosine_title"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_title'], x['query_vec']), axis=1)
     relevance_with_values["cosine_body"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_body'], x['query_vec']), axis=1)
 
+    title_text = relevance_with_values[["title"]].as_matrix()
+    body_text = relevance_with_values[["body"]].as_matrix()
+    query_text = relevance_with_values[["query"]].as_matrix()
+
+    # test = vectorizer.transform(relevance_with_values["body"].as_matrix())
+
+
+    # windowing(title_text, query_text)
+
     # vectorizer_word_pairs = TfidfVectorizer(  stop_words="english", lowercase=True, norm="l2", ngram_range=(2, 2))
     # vectorizer_word_pairs = vectorizer_word_pairs.fit(relevance_with_values["all_text"])
     # relevance_with_values["doc_vec_title_word_pair"] = relevance_with_values.apply(lambda x: vectorizer_word_pairs.transform([x["title"] ]), axis =1)
@@ -125,13 +129,16 @@ def create_model(all_documents_file, relevance_file,query_file):
     ''' Step 6. Defining the feature and label  for classification'''
 
 
-    X = relevance_with_values[["cosine_title"] + ["cosine_body"]]
+    X = relevance_with_values[["cosine_title"] + ["cosine_body"] ]
+
     print ("Features: " , X)
+    Y = [v for k, v in relevance_with_values["position"].items()]
+    # Y = relevance_with_values["position"]
 
 
-    Y = []
-    for k, v in relevance_with_values["position"].items():
-        Y.append(v)
+    # Normalize
+    # from sklearn import preprocessing
+    # X = preprocessing.normalize(X, norm='l2')
 
     if(is_debug):
         print ("Lables: ", Y)
