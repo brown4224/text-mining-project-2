@@ -12,7 +12,7 @@ from nltk import PorterStemmer
 from nltk.corpus import stopwords
 analyzer = CountVectorizer().build_analyzer()
 
-is_debug = True
+is_debug = False
 
 '''Please feel free to modify this function (load_models)
    Make sure the function return the models required for the function below evaluate model
@@ -44,40 +44,27 @@ def cosine_similarity(x,y):
         return cos
     return 0.0
 
-def windowing(doc, query):
-    tokens_doc = str(doc).split(" ")
-    tokens_query = str(doc).split(" ")
-
-
-
 
 def stemming(tokens):
     return (PorterStemmer().stem(token) for token in analyzer(tokens))
 
-def multi_label(postions,length):
-    postions = postions.as_matrix()
-    Y= np.zeros((length, 4))
-    for query, postion, doc in  postions:
-        Y[doc - 1][postion - 1] = query
-        # Y[doc - 1][postion - 1] = 1
-    from sklearn.preprocessing import MultiLabelBinarizer
-    Y = MultiLabelBinarizer().fit_transform(Y)
+def one_hot(labels):
+    l = len(labels)
+    Y= np.zeros((l, 4))
+    for i in range(l):
+        Y[i][labels[i] - 1] = 1
     return Y
+
 
 def create_model(all_documents_file, relevance_file,query_file):
 
     '''Step 1. Creating  a dataframe with three fields query, title, and relevance(position)'''
     documents = pd.read_json(all_documents_file)[["id", "title", "body"]]
     query_file = pd.read_json(query_file)[["query number","query" ]]
-    relevance = pd.read_json(relevance_file)[["query_num", "position", "id"]]
-    # labels = multi_label(relevance, len(documents))
 
     relevance = pd.read_json(relevance_file)[["query_num", "position", "id"]]
     relevance_with_values = relevance.merge(query_file,left_on ="query_num", right_on="query number")[ ["id","query", "position"]]\
         .merge(documents,left_on ="id", right_on="id") [["query", "position", "title", "body"]]
-
-
-
 
 
     if(is_debug):
@@ -93,7 +80,7 @@ def create_model(all_documents_file, relevance_file,query_file):
     ''' Step 3. Creating a model for generating TF feature'''
 
     # vectorizer = TfidfVectorizer( stop_words="english", lowercase=True, norm="l2", analyzer=stemming)
-    vectorizer = TfidfVectorizer( stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
+    vectorizer = TfidfVectorizer(min_df=0.0, max_df=1.0, stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
     vectorizer = vectorizer.fit(relevance_with_values["all_text"])
 
 
@@ -133,12 +120,8 @@ def create_model(all_documents_file, relevance_file,query_file):
 
     print ("Features: " , X)
     Y = [v for k, v in relevance_with_values["position"].items()]
-    # Y = relevance_with_values["position"]
+    Y = one_hot(Y)
 
-
-    # Normalize
-    # from sklearn import preprocessing
-    # X = preprocessing.normalize(X, norm='l2')
 
     if(is_debug):
         print ("Lables: ", Y)
