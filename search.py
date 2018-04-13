@@ -3,6 +3,8 @@ from random import randint
 inverted_index = {}
 import pandas as pd
 
+from create_model import load_models
+
 from create_model import evaluate_model
 def remove_not_indexed_toknes(tokens):
     return [token for token in tokens if token in inverted_index]
@@ -85,7 +87,7 @@ def add_to_index(document):
 def create_index():
     for document in read_documents():
         add_to_index(document)
-    print "Created index with size {}".format(len(inverted_index))
+    print ("Created index with size {}".format(len(inverted_index)))
 
 
 create_index()
@@ -93,5 +95,5 @@ create_index()
 if __name__ == '__main__':
     all_queries = [query for query in read_queries() if query['query number'] != 0]
     for query in all_queries:
-        documents = search_query(query)
-        print "Query:{} and Results:{}".format(query, documents)
+        documents = search_query(query, load_models())
+        print ("Query:{} and Results:{}".format(query, documents))

@@ -33,10 +33,16 @@ def evaluate_model(model, query, document):
     print (model)
     query_vec = model[0].transform([query['query']])
     title_vec = model[0].transform([document['title']])
-    cos = cosine_similarity(query_vec, title_vec)
-    result = model[1].predict(cos)
+    body_vec = model[0].transform([document['body']])
+
+    cos_title = cosine_similarity(query_vec, title_vec)
+    cos_body = cosine_similarity(query_vec, body_vec)
+
+    result = model[1].predict([[cos_title, cos_body]])
     return result[0],0.5
 
+def common_terms(x,y):
+    x.split(" ").intersect(y.split(" "))
 
 def cosine_similarity(x,y):
     cos = cosine(x.toarray()[0], y.toarray()[0])
@@ -89,38 +95,25 @@ def create_model(all_documents_file, relevance_file,query_file):
 
     ''' Step 5. Converting query and title to vectors and finding cosine similarity of the vectors'''
     relevance_with_values["doc_vec_title"] = relevance_with_values.apply(lambda x: vectorizer.transform([x["title"] ]), axis =1)
-
     relevance_with_values["doc_vec_body"] = relevance_with_values.apply(lambda x: vectorizer.transform([x["body"]]), axis =1)
     relevance_with_values["query_vec"] = relevance_with_values.apply(lambda x: vectorizer.transform([x["query"]]), axis =1)
     relevance_with_values["cosine_title"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_title'], x['query_vec']), axis=1)
     relevance_with_values["cosine_body"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_body'], x['query_vec']), axis=1)
 
-    title_text = relevance_with_values[["title"]].as_matrix()
-    body_text = relevance_with_values[["body"]].as_matrix()
-    query_text = relevance_with_values[["query"]].as_matrix()
 
-    # test = vectorizer.transform(relevance_with_values["body"].as_matrix())
-
-
-    # windowing(title_text, query_text)
-
-    # vectorizer_word_pairs = TfidfVectorizer(  stop_words="english", lowercase=True, norm="l2", ngram_range=(2, 2))
-    # vectorizer_word_pairs = vectorizer_word_pairs.fit(relevance_with_values["all_text"])
-    # relevance_with_values["doc_vec_title_word_pair"] = relevance_with_values.apply(lambda x: vectorizer_word_pairs.transform([x["title"] ]), axis =1)
-    # relevance_with_values["doc_vec_body_word_pair"] = relevance_with_values.apply(lambda x: vectorizer_word_pairs.transform([x["body"]]), axis =1)
-    # relevance_with_values["query_vec_word_pair"] = relevance_with_values.apply(lambda x: vectorizer_word_pairs.transform([x["query"]]), axis =1)
-    # relevance_with_values["cosine_title_word_pair"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_title'], x['query_vec']), axis=1)
-    # relevance_with_values["cosine_body_word_pair"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_body'], x['query_vec']), axis=1)
-    # X = relevance_with_values[["cosine_title"] + ["cosine_body"] + ["cosine_title_word_pair"] + ["cosine_body_word_pair"]]
 
     ''' Step 6. Defining the feature and label  for classification'''
 
 
     X = relevance_with_values[["cosine_title"] + ["cosine_body"] ]
 
-    print ("Features: " , X)
-    Y = [v for k, v in relevance_with_values["position"].items()]
-    Y = one_hot(Y)
+    # t = vectorizer.transform(relevance_with_values["title"])
+    Y = relevance_with_values["position"]
+
+
+    # # print ("Features: " , X.shape)
+    # Y = [v for k, v in relevance_with_values["position"].items()]
+    # Y = one_hot(Y)
 
 
     if(is_debug):
