@@ -65,18 +65,9 @@ def cosine_similarity(x,y):
 def stemming(tokens):
     return (PorterStemmer().stem(token) for token in analyzer(tokens))
 
-def one_hot(labels):
-    l = len(labels)
-    Y= np.zeros((l, 4))
-    for i in range(l):
-        Y[i][labels[i] - 1] = 1
-    return Y
 
-
-
-def idf_metadata(X, L):
-    sum_idf = np.sum(X)
-    return float(sum_idf) / (len(L) + 1.0)
+def text_length(X):
+    return len(X) + 1
 
 
 def create_model(all_documents_file, relevance_file,query_file):
@@ -113,17 +104,28 @@ def create_model(all_documents_file, relevance_file,query_file):
     relevance_with_values["common_title"] = relevance_with_values.apply(lambda x: common_terms(x["title"], x["query"] ), axis =1)
     relevance_with_values["common_body"] = relevance_with_values.apply(lambda x: common_terms(x["body"], x["query"] ), axis =1)
 
-
     relevance_with_values["max_title_idf"] = relevance_with_values.apply(lambda x: np.max(x["doc_vec_title"]), axis =1)
-    relevance_with_values["sum_title_idf"] = relevance_with_values.apply(lambda x: idf_metadata(x["doc_vec_title"], x["title"] ), axis =1)
-    relevance_with_values["max_body_idf"] = relevance_with_values.apply(lambda x: np.max(x["doc_vec_body"] ), axis =1)
-    relevance_with_values["sum_body_idf"] = relevance_with_values.apply(lambda x: idf_metadata(x["doc_vec_body"], x["body"] ), axis =1)
+    relevance_with_values["max_pos_title_idf"] = relevance_with_values.apply(lambda x: np.argmax(x["doc_vec_title"]), axis =1)
+    relevance_with_values["sum_title_idf"] = relevance_with_values.apply(lambda x: np.sum(x["doc_vec_title"]), axis =1)
+    relevance_with_values["len_title_idf"] = relevance_with_values.apply(lambda x: text_length(x["title"]), axis =1)
+    relevance_with_values["norm_title_idf"] = np.divide(relevance_with_values["sum_title_idf"] ,relevance_with_values["len_title_idf"] )
+
+    relevance_with_values["max_body_idf"] = relevance_with_values.apply(lambda x: np.max(x["doc_vec_body"]), axis =1)
+    relevance_with_values["max_pos_body_idf"] = relevance_with_values.apply(lambda x: np.argmax(x["doc_vec_body"]), axis =1)
+    relevance_with_values["sum_body_idf"] = relevance_with_values.apply(lambda x: np.sum(x["doc_vec_body"]), axis =1)
+    relevance_with_values["len_body_idf"] = relevance_with_values.apply(lambda x: text_length(x["body"]), axis =1)
+    relevance_with_values["norm_body_idf"] = np.divide(relevance_with_values["sum_body_idf"] ,relevance_with_values["len_body_idf"] )
+
+    relevance_with_values["max_query_idf"] = relevance_with_values.apply(lambda x: np.max(x["query_vec"]), axis =1)
+    relevance_with_values["max_pos_query_idf"] = relevance_with_values.apply(lambda x: np.argmax(x["query_vec"]), axis =1)
+    relevance_with_values["sum_query_idf"] = relevance_with_values.apply(lambda x: np.sum(x["query_vec"]), axis =1)
+    relevance_with_values["len_query_idf"] = relevance_with_values.apply(lambda x: text_length(x["query"]), axis =1)
+    relevance_with_values["norm_query_idf"] = np.divide(relevance_with_values["sum_query_idf"] ,relevance_with_values["len_query_idf"] )
+
 
     ''' Step 6. Defining the feature and label  for classification'''
-    X = relevance_with_values[  ["cosine_title"]+ ["common_title"] + ["max_title_idf"] + ["sum_title_idf"] + ["cosine_body"] + ["common_body"]  + ["max_body_idf"] + ["sum_body_idf"]]
-    # X = relevance_with_values[ ["max_query_idf"] + ["sum_query_idf"] + ["cosine_title"]+ ["common_title"] + ["max_title_idf"] + ["sum_title_idf"] + ["cosine_body"] + ["common_body"]   ]
+    X = relevance_with_values[ ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["len_query_idf"] + ["norm_query_idf"] + ["cosine_title"]+ ["common_title"] + ["max_title_idf"] + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"] + ["cosine_body"] + ["common_body"]  + ["max_body_idf"] + ["sum_body_idf"]+ ["norm_body_idf"] + ["len_title_idf"] ]
     Y = [v for k, v in relevance_with_values["position"].items()]
-    # Y = relevance_with_values["position"]
 
 
     ''' Step 7. Splitting the data for validation'''
