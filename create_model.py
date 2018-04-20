@@ -61,6 +61,14 @@ def cosine_similarity(x,y):
         return cos
     return 0.0
 
+def idf_mul(X):
+    total = 1.0
+    for x in X:
+        np.mul
+        total *= x
+
+    print(total)
+    return total
 
 def stemming(tokens):
     return (PorterStemmer().stem(token) for token in analyzer(tokens))
@@ -68,7 +76,6 @@ def stemming(tokens):
 
 def text_length(X):
     return len(X) + 1
-
 
 def create_model(all_documents_file, relevance_file,query_file):
 
@@ -124,7 +131,7 @@ def create_model(all_documents_file, relevance_file,query_file):
 
 
     ''' Step 6. Defining the feature and label  for classification'''
-    X = relevance_with_values[ ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["len_query_idf"] + ["norm_query_idf"] + ["cosine_title"]+ ["common_title"] + ["max_title_idf"] + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"] + ["cosine_body"] + ["common_body"]  + ["max_body_idf"] + ["sum_body_idf"]+ ["norm_body_idf"] + ["len_title_idf"] ]
+    X = relevance_with_values[ ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"]   + ["len_query_idf"] + ["norm_query_idf"] + ["cosine_title"]+ ["common_title"] + ["max_title_idf"] + ["max_pos_title_idf"] + ["sum_title_idf"] +  ["norm_title_idf"] + ["len_title_idf"] + ["cosine_body"] + ["common_body"]  + ["max_body_idf"] + ["sum_body_idf"]+ ["norm_body_idf"] + ["len_title_idf"] ]
     Y = [v for k, v in relevance_with_values["position"].items()]
 
 
