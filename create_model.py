@@ -170,13 +170,6 @@ def create_model(all_documents_file, relevance_file,query_file):
     relevance_with_values["common_title"] = relevance_with_values.apply(lambda x: common_terms(x["title"], x["query"] ), axis =1)
     relevance_with_values["common_body"] = relevance_with_values.apply(lambda x: common_terms(x["body"], x["query"] ), axis =1)
 
-
-    relevance_with_values["title_count"], relevance_with_values["title_max_pos"], relevance_with_values["title_max"], relevance_with_values["title_sum"], \
-    relevance_with_values["query_title_max_pos"], relevance_with_values["query_title_max"], relevance_with_values["query_title_sum"] =  idf_sparce(relevance_with_values["doc_vec_title"], relevance_with_values["query_vec"])
-    relevance_with_values["body_count"], relevance_with_values["body_max_pos"], relevance_with_values["body_max"], relevance_with_values["body_sum"], \
-    relevance_with_values["query_body_max_pos"], relevance_with_values["query_body_max"], relevance_with_values["query_body_sum"] =  idf_sparce(relevance_with_values["doc_vec_body"], relevance_with_values["query_vec"])
-
-
     relevance_with_values["max_title_idf"] = relevance_with_values.apply(lambda x: np.max(x["doc_vec_title"]), axis =1)
     relevance_with_values["max_pos_title_idf"] = relevance_with_values.apply(lambda x: np.argmax(x["doc_vec_title"]), axis =1)
     relevance_with_values["sum_title_idf"] = relevance_with_values.apply(lambda x: np.sum(x["doc_vec_title"]), axis =1)
@@ -194,7 +187,11 @@ def create_model(all_documents_file, relevance_file,query_file):
     relevance_with_values["sum_query_idf"] = relevance_with_values.apply(lambda x: np.sum(x["query_vec"]), axis =1)
     relevance_with_values["len_query_idf"] = relevance_with_values.apply(lambda x: text_length(x["query"]), axis =1)
     relevance_with_values["norm_query_idf"] = np.divide(relevance_with_values["sum_query_idf"] ,relevance_with_values["len_query_idf"] )
-
+    #
+    # relevance_with_values["title_count"], relevance_with_values["title_max_pos"], relevance_with_values["title_max"], relevance_with_values["title_sum"], \
+    # relevance_with_values["query_title_max_pos"], relevance_with_values["query_title_max"], relevance_with_values["query_title_sum"] =  idf_sparce(relevance_with_values["doc_vec_title"], relevance_with_values["query_vec"])
+    # relevance_with_values["body_count"], relevance_with_values["body_max_pos"], relevance_with_values["body_max"], relevance_with_values["body_sum"], \
+    # relevance_with_values["query_body_max_pos"], relevance_with_values["query_body_max"], relevance_with_values["query_body_sum"] =  idf_sparce(relevance_with_values["doc_vec_body"], relevance_with_values["query_vec"])
 
 
     ''' Step 6. Defining the feature and label  for classification'''
@@ -204,14 +201,20 @@ def create_model(all_documents_file, relevance_file,query_file):
     # + ["title_count"] + ["title_max_pos"] +["title_max"] + ["title_sum"] \
     # + ["body_count"] + ["body_max_pos"] +["body_max"] + ["body_sum"]]
 
-    # X = relevance_with_values[ ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"]   + ["len_query_idf"] + ["norm_query_idf"] + ["cosine_title"]+ ["common_title"] + ["max_title_idf"] + ["max_pos_title_idf"] + ["sum_title_idf"] +  ["norm_title_idf"] + ["len_title_idf"] + ["cosine_body"] + ["common_body"]  + ["max_body_idf"] + ["sum_body_idf"]+ ["norm_body_idf"] + ["len_title_idf"] ]
+    X = relevance_with_values[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]
+        + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["norm_query_idf"] + ["len_query_idf"]
+        + ["max_title_idf"]  + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"]
+        + ["max_body_idf"]   + ["max_pos_body_idf"]  + ["sum_body_idf"]  + ["norm_body_idf"]  + ["len_title_idf"] ]
 
 
-    X = relevance_with_values[ ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"]   + ["len_query_idf"] + ["norm_query_idf"] + ["cosine_title"]+ ["common_title"] + ["max_title_idf"] + ["max_pos_title_idf"] + ["sum_title_idf"] +  ["norm_title_idf"] + ["len_title_idf"] + ["cosine_body"] + ["common_body"]  + ["max_body_idf"] + ["sum_body_idf"]+ ["norm_body_idf"] + ["len_title_idf"] \
-    + ["query_title_max_pos"]+ ["query_title_max"]+ ["query_title_sum"] \
-    + ["query_body_max_pos"] + ["query_body_max"] + ["query_body_sum"] \
-    + ["title_count"] + ["title_max_pos"] +["title_max"] + ["title_sum"] \
-    + ["body_count"] + ["body_max_pos"] +["body_max"] + ["body_sum"]]
+    # X = relevance_with_values[ ["cosine_title"] + ["cosine_body"] + ["common_title"] + ["common_body"] \
+    # + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"]   + ["len_query_idf"] + ["norm_query_idf"] \
+    # + ["max_title_idf"] + ["max_pos_title_idf"] + ["sum_title_idf"] +  ["norm_title_idf"] + ["len_title_idf"] \
+    # + ["max_body_idf"] + ["sum_body_idf"]+ ["norm_body_idf"] + ["len_title_idf"] \
+    # + ["query_title_max_pos"]+ ["query_title_max"]+ ["query_title_sum"] \
+    # + ["query_body_max_pos"] + ["query_body_max"] + ["query_body_sum"] \
+    # + ["title_count"] + ["title_max_pos"] +["title_max"] + ["title_sum"] \
+    # + ["body_count"] + ["body_max_pos"] +["body_max"] + ["body_sum"]]
 
     Y = [v for k, v in relevance_with_values["position"].items()]
 
