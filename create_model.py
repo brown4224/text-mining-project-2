@@ -30,6 +30,7 @@ def load_models():
   Preferably implement the function in a different file and call from here. Make sure keep everything else the same.
 '''
 
+
 def evaluate_model(model, query, document):
     query = query['query']
     title = document['title']
@@ -38,16 +39,45 @@ def evaluate_model(model, query, document):
     title_vec = model[0].transform([title])
     body_vec = model[0].transform([body])
 
-    common_title = common_terms(title, query)
-    common_body = common_terms(body, query)
-
-
-
     cos_title = cosine_similarity(query_vec, title_vec)
     cos_body = cosine_similarity(query_vec, body_vec)
 
-    result = model[1].predict([[cos_title, common_title, cos_body, common_body]])
+    common_title = common_terms(title, query)
+    common_body = common_terms(body, query)
+
+    # Query idf
+    mq = np.max(query_vec)
+    mqp = np.argmax(query_vec)
+    lq = text_length(query)
+    qs = np.sum(query_vec)
+    qsn = qs / lq
+
+    # Title idf
+    mt = np.max(title_vec)
+    mtp = np.argmax(title_vec)
+    lt = text_length(title)
+    ts = np.sum(title_vec)
+    tsn = ts / lt
+
+    # Body idf
+    mb = np.max(body_vec)
+    mbp = np.argmax(body_vec)
+    lb = text_length(body)
+    bs = np.sum(body_vec)
+    bsn = bs / lb
+
+
+    result = model[1].predict([[ cos_title, cos_body, common_title, common_body,
+                                 mq, mqp, qs, qsn, lq,
+                                 mt, mbp, bs, bsn, lb,
+                                 mb, mbp, bs, bsn, lb]])
+
+
+
+
+    # result = model[1].predict([[cos_title, common_title, cos_body, common_body]])
     return result[0],0.5
+
 
 def common_terms(x,y):
     count = 0
@@ -78,16 +108,17 @@ def stemming(tokens):
 def text_length(X):
     return len(X) + 1
 
+
 def idf_sparce(doc_vec, query_vec):
     count = []
     doc_max_pos = []
     doc_max = []
-    doc_min = []
+    doc_prob = []
     doc_sum = []
 
     query_max_pos = []
     query_max = []
-    query_min = []
+    query_prob = []
     query_sum = []
 
 
@@ -100,40 +131,40 @@ def idf_sparce(doc_vec, query_vec):
         for doc_word, doc_idf in zip(doc.col, doc.data):
             dmp = 0
             dm = 0.0
+            dp = 1.0
             ds = 0.0
             qmp = 0
             qm = 0.0
+            qp = 1.0
             qs = 0.0
             c = 0
             for query_word, query_idf in zip(query.col, query.data):
                 if(doc_word == query_word):
                     if( doc_idf > dm):
-                        dm = doc_idf
                         dmp = doc_word
+                        dm = doc_idf
+                        dp *= doc_idf
                     if(query_idf > qm):
-                        qm = query_idf
                         qmp = query_word
+                        qm = query_idf
+                        qp *= query_idf
                     ds += doc_idf
                     qs += query_idf
                     c += 1
         count.append(c)
         doc_max_pos.append(dmp)
         doc_max.append(dm)
+        doc_prob.append(dp)
         doc_sum.append(ds / (c + 1))
         query_max_pos.append(qmp)
         query_max.append(qm)
+        query_prob.append(qp)
         query_sum.append(qs / (c + 1))
-    return count, doc_max_pos, doc_max, doc_sum, query_max_pos, query_max, query_sum
-
-
-        # print(zip(doc.row, doc.col, doc.data))
-        # exit(1)
+    return count, doc_max_pos, doc_max, doc_prob,  doc_sum, query_max_pos, query_max, query_prob,  query_sum
 
 
 
-    # for i, j, v in zip(doc.row, doc.col, doc.data):
-    #     print( "%s" % (v))
-    #     # print( "(%d, %d), %s" % (i, j, v))
+
 
 
 def create_model(all_documents_file, relevance_file,query_file):
@@ -187,11 +218,11 @@ def create_model(all_documents_file, relevance_file,query_file):
     relevance_with_values["sum_query_idf"] = relevance_with_values.apply(lambda x: np.sum(x["query_vec"]), axis =1)
     relevance_with_values["len_query_idf"] = relevance_with_values.apply(lambda x: text_length(x["query"]), axis =1)
     relevance_with_values["norm_query_idf"] = np.divide(relevance_with_values["sum_query_idf"] ,relevance_with_values["len_query_idf"] )
-    #
-    # relevance_with_values["title_count"], relevance_with_values["title_max_pos"], relevance_with_values["title_max"], relevance_with_values["title_sum"], \
-    # relevance_with_values["query_title_max_pos"], relevance_with_values["query_title_max"], relevance_with_values["query_title_sum"] =  idf_sparce(relevance_with_values["doc_vec_title"], relevance_with_values["query_vec"])
-    # relevance_with_values["body_count"], relevance_with_values["body_max_pos"], relevance_with_values["body_max"], relevance_with_values["body_sum"], \
-    # relevance_with_values["query_body_max_pos"], relevance_with_values["query_body_max"], relevance_with_values["query_body_sum"] =  idf_sparce(relevance_with_values["doc_vec_body"], relevance_with_values["query_vec"])
+    ########################################################################################################################################
+    relevance_with_values["title_count"], relevance_with_values["title_max_pos"], relevance_with_values["title_max"], relevance_with_values["title_prob"],  relevance_with_values["title_sum"], \
+    relevance_with_values["query_title_max_pos"], relevance_with_values["query_title_max"], relevance_with_values["query_title_prob"], relevance_with_values["query_title_sum"] =  idf_sparce(relevance_with_values["doc_vec_title"], relevance_with_values["query_vec"])
+    relevance_with_values["body_count"], relevance_with_values["body_max_pos"], relevance_with_values["body_max"],  relevance_with_values["body_prob"], relevance_with_values["body_sum"], \
+    relevance_with_values["query_body_max_pos"], relevance_with_values["query_body_max"], relevance_with_values["query_body_prob"], relevance_with_values["query_body_sum"] =  idf_sparce(relevance_with_values["doc_vec_body"], relevance_with_values["query_vec"])
 
 
     ''' Step 6. Defining the feature and label  for classification'''
@@ -206,15 +237,10 @@ def create_model(all_documents_file, relevance_file,query_file):
         + ["max_title_idf"]  + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"]
         + ["max_body_idf"]   + ["max_pos_body_idf"]  + ["sum_body_idf"]  + ["norm_body_idf"]  + ["len_title_idf"] ]
 
+    #
+    # X = relevance_with_values[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]]
 
-    # X = relevance_with_values[ ["cosine_title"] + ["cosine_body"] + ["common_title"] + ["common_body"] \
-    # + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"]   + ["len_query_idf"] + ["norm_query_idf"] \
-    # + ["max_title_idf"] + ["max_pos_title_idf"] + ["sum_title_idf"] +  ["norm_title_idf"] + ["len_title_idf"] \
-    # + ["max_body_idf"] + ["sum_body_idf"]+ ["norm_body_idf"] + ["len_title_idf"] \
-    # + ["query_title_max_pos"]+ ["query_title_max"]+ ["query_title_sum"] \
-    # + ["query_body_max_pos"] + ["query_body_max"] + ["query_body_sum"] \
-    # + ["title_count"] + ["title_max_pos"] +["title_max"] + ["title_sum"] \
-    # + ["body_count"] + ["body_max_pos"] +["body_max"] + ["body_sum"]]
+
 
     Y = [v for k, v in relevance_with_values["position"].items()]
 
@@ -225,7 +251,15 @@ def create_model(all_documents_file, relevance_file,query_file):
     ''' Step 8. Classification and validation'''
     target_names = ['1', '2', '3','4']
     # clf = MultinomialNB().fit(X_train, y_train)
-    clf = RandomForestClassifier().fit(X_train, y_train)
+    # clf = RandomForestClassifier().fit(X_train, y_train)
+    from sklearn.svm import LinearSVC
+    from sklearn.svm import SVC
+
+    from sklearn.multiclass import OneVsRestClassifier
+
+    # clf = OneVsRestClassifier(LinearSVC()).fit(X_train, y_train)
+    # clf = LinearSVC().fit(X_train, y_train)
+    clf = SVC().fit(X_train, y_train)
 
     print(classification_report(y_test,  clf.predict(X_test), target_names=target_names))
 
