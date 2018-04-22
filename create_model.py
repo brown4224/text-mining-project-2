@@ -103,15 +103,15 @@ def cosine_similarity(x,y, w2v=False):
 
 # def cosine_similarity_w2v(x, y):
 
-
-def idf_mul(X):
-    total = 1.0
-    for x in X:
-        np.mul
-        total *= x
-
-    print(total)
-    return total
+#
+# def idf_mul(X):
+#     total = 1.0
+#     for x in X:
+#         np.mul
+#         total *= x
+#
+#     print(total)
+#     return total
 
 def stemming(tokens):
     return (PorterStemmer().stem(token) for token in analyzer(tokens))
@@ -123,13 +123,11 @@ def text_length(X):
 
 def idf_prob(doc_sparce):
     doc = scipy.sparse.coo_matrix(doc_sparce)
+    dp = 1.0
     for doc_word, doc_idf in zip(doc.col, doc.data):
-        dp = 1.0
-
         dp *= doc_idf
+    return dp
 
-
-    #
 
 def convert_to_w2v(tokens, w2v):
     tokens = tokens.split(" ")
@@ -185,27 +183,31 @@ def create_model(all_documents_file, relevance_file,query_file):
     rv["cosine_body"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_body'], x['query_vec']), axis=1)
     rv["common_title"] = rv.apply(lambda x: common_terms(x["title"], x["query"] ), axis =1)
     rv["common_body"] = rv.apply(lambda x: common_terms(x["body"], x["query"] ), axis =1)
-
+    # idf_prob
 
     ''' IDF Extraction'''
+    rv["max_query_idf"] = rv.apply(lambda x: np.max(x["query_vec"]), axis=1)
+    rv["max_pos_query_idf"] = rv.apply(lambda x: np.argmax(x["query_vec"]), axis=1)
+    rv["sum_query_idf"] = rv.apply(lambda x: np.sum(x["query_vec"]), axis=1)
+    rv["len_query_idf"] = rv.apply(lambda x: text_length(x["query"]), axis=1)
+    rv["norm_query_idf"] = np.divide(rv["sum_query_idf"], rv["len_query_idf"])
+    rv["prob_query_idf"] = rv.apply(lambda x: idf_prob(x["query_vec"]), axis =1)
 
     rv["max_title_idf"] = rv.apply(lambda x: np.max(x["doc_vec_title"]), axis =1)
     rv["max_pos_title_idf"] = rv.apply(lambda x: np.argmax(x["doc_vec_title"]), axis =1)
     rv["sum_title_idf"] = rv.apply(lambda x: np.sum(x["doc_vec_title"]), axis =1)
     rv["len_title_idf"] = rv.apply(lambda x: text_length(x["title"]), axis =1)
     rv["norm_title_idf"] = np.divide(rv["sum_title_idf"] ,rv["len_title_idf"] )
+    rv["prob_title_idf"] = rv.apply(lambda x: idf_prob(x["doc_vec_title"]), axis =1)
 
     rv["max_body_idf"] = rv.apply(lambda x: np.max(x["doc_vec_body"]), axis =1)
     rv["max_pos_body_idf"] = rv.apply(lambda x: np.argmax(x["doc_vec_body"]), axis =1)
     rv["sum_body_idf"] = rv.apply(lambda x: np.sum(x["doc_vec_body"]), axis =1)
     rv["len_body_idf"] = rv.apply(lambda x: text_length(x["body"]), axis =1)
     rv["norm_body_idf"] = np.divide(rv["sum_body_idf"] ,rv["len_body_idf"] )
+    rv["prob_body_idf"] = rv.apply(lambda x: idf_prob(x["doc_vec_body"]), axis =1)
 
-    rv["max_query_idf"] = rv.apply(lambda x: np.max(x["query_vec"]), axis =1)
-    rv["max_pos_query_idf"] = rv.apply(lambda x: np.argmax(x["query_vec"]), axis =1)
-    rv["sum_query_idf"] = rv.apply(lambda x: np.sum(x["query_vec"]), axis =1)
-    rv["len_query_idf"] = rv.apply(lambda x: text_length(x["query"]), axis =1)
-    rv["norm_query_idf"] = np.divide(rv["sum_query_idf"] ,rv["len_query_idf"] )
+
 
 
     '''  Word 2V'''
@@ -217,7 +219,6 @@ def create_model(all_documents_file, relevance_file,query_file):
     ''' Cos W2V'''
     rv["cosine_title_w2v"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
     rv["cosine_body_w2v"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
-    print(rv["cosine_body_w2v"])
 
 
 
@@ -225,12 +226,16 @@ def create_model(all_documents_file, relevance_file,query_file):
 
     ''' Step 6. Defining the feature and label  for classification'''
 
+    # X = rv[ ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
+    #     + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+    #     + ["max_title_idf"]  + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
+    #     + ["max_body_idf"]   + ["max_pos_body_idf"]  + ["sum_body_idf"]  + ["norm_body_idf"]  + ["len_body_idf"]+ ["prob_body_idf"]]
 
 
     X = rv[ ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
-        + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["norm_query_idf"] + ["len_query_idf"]
-        + ["max_title_idf"]  + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"]
-        + ["max_body_idf"]   + ["max_pos_body_idf"]  + ["sum_body_idf"]  + ["norm_body_idf"]  + ["len_title_idf"] ]
+        + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+        + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
+        + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]]
 
     #
     # X = rv[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]]
