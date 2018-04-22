@@ -13,6 +13,8 @@ from nltk.corpus import stopwords
 analyzer = CountVectorizer().build_analyzer()
 import scipy
 from sklearn.svm import SVC
+import gensim, logging
+from gensim.models.doc2vec import LabeledSentence
 
 is_debug = False
 
@@ -87,11 +89,20 @@ def common_terms(x,y):
             count += 1
     return count
 
-def cosine_similarity(x,y):
-    cos = cosine(x.toarray()[0], y.toarray()[0])
+def cosine_similarity(x,y, w2v=False):
+    if x is None or y is None:
+        return 0.0
+    if w2v:
+        cos = cosine(np.array(x), np.array(y))
+    else:
+        cos = cosine(x.toarray()[0], y.toarray()[0])
+
     if np.isfinite(cos):
         return cos
     return 0.0
+
+# def cosine_similarity_w2v(x, y):
+
 
 def idf_mul(X):
     total = 1.0
@@ -110,60 +121,27 @@ def text_length(X):
     return len(X) + 1
 
 
-def idf_sparce(doc_vec, query_vec):
-    count = []
-    doc_max_pos = []
-    doc_max = []
-    doc_prob = []
-    doc_sum = []
+def idf_prob(doc_sparce):
+    doc = scipy.sparse.coo_matrix(doc_sparce)
+    for doc_word, doc_idf in zip(doc.col, doc.data):
+        dp = 1.0
 
-    query_max_pos = []
-    query_max = []
-    query_prob = []
-    query_sum = []
+        dp *= doc_idf
 
 
+    #
 
-    for i in range(len(doc_vec)):
-
-        doc = scipy.sparse.coo_matrix(doc_vec[i])
-        query = scipy.sparse.coo_matrix(query_vec[i])
-
-        for doc_word, doc_idf in zip(doc.col, doc.data):
-            dmp = 0
-            dm = 0.0
-            dp = 1.0
-            ds = 0.0
-            qmp = 0
-            qm = 0.0
-            qp = 1.0
-            qs = 0.0
-            c = 0
-            for query_word, query_idf in zip(query.col, query.data):
-                if(doc_word == query_word):
-                    if( doc_idf > dm):
-                        dmp = doc_word
-                        dm = doc_idf
-                        dp *= doc_idf
-                    if(query_idf > qm):
-                        qmp = query_word
-                        qm = query_idf
-                        qp *= query_idf
-                    ds += doc_idf
-                    qs += query_idf
-                    c += 1
-        count.append(c)
-        doc_max_pos.append(dmp)
-        doc_max.append(dm)
-        doc_prob.append(dp)
-        doc_sum.append(ds / (c + 1))
-        query_max_pos.append(qmp)
-        query_max.append(qm)
-        query_prob.append(qp)
-        query_sum.append(qs / (c + 1))
-    return count, doc_max_pos, doc_max, doc_prob,  doc_sum, query_max_pos, query_max, query_prob,  query_sum
-
-
+def convert_to_w2v(tokens, w2v):
+    tokens = tokens.split(" ")
+    pattern_vec = np.zeros(w2v.layer1_size)
+    n_word = 0
+    if len(tokens) > 1:
+        for token in tokens:
+            if token in w2v:
+                pattern_vec = np.add(pattern_vec, w2v[token.strip()])
+                n_word += 1
+                pattern_vec = np.divide(pattern_vec, n_word)
+    return pattern_vec.tolist()
 
 
 
@@ -175,72 +153,91 @@ def create_model(all_documents_file, relevance_file,query_file):
     query_file = pd.read_json(query_file)[["query number","query" ]]
 
     relevance = pd.read_json(relevance_file)[["query_num", "position", "id"]]
-    relevance_with_values = relevance.merge(query_file,left_on ="query_num", right_on="query number")[ ["id","query", "position"]]\
+    rv = relevance.merge(query_file,left_on ="query_num", right_on="query number")[ ["id","query", "position"]]\
         .merge(documents,left_on ="id", right_on="id") [["query", "position", "title", "body"]]
 
 
     '''Step 2. Creating  a column for creating index'''
 
-    relevance_with_values ["all_text"] = relevance_with_values.apply( lambda x : x["query"] + x["title"] + x["body"] , axis =1)
+    rv ["all_text"] = rv.apply( lambda x : x["query"] + x["title"] + x["body"] , axis =1)
 
     ''' Step 3. Creating a model for generating TF feature'''
 
-    # vectorizer = TfidfVectorizer(min_df=0.0, max_df=1.0, stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
     vectorizer = TfidfVectorizer(min_df=0.0, max_df=1.0, stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
-    vectorizer = vectorizer.fit(relevance_with_values["all_text"])
+    vectorizer = vectorizer.fit(rv["all_text"])
 
+
+    ''' Word to Vec Model'''
+    # rv["all_tokens"] = rv.apply(lambda x: x["all_text"].split(" "), axis=1)
+    w2v_model = gensim.models.Word2Vec(rv["all_text"], min_count=1, workers=4)
 
     ''' Step 4. Saving the model for TF features'''
     joblib.dump(vectorizer, 'resources/vectorizer.pkl')
+    joblib.dump(w2v_model, 'resources/w2v.pkl')
 
     ''' Step 5. Converting query and title to vectors and finding cosine similarity of the vectors'''
-    relevance_with_values["query_vec"] = relevance_with_values.apply(lambda x: vectorizer.transform([x["query"]]), axis =1)
-    relevance_with_values["doc_vec_title"] = relevance_with_values.apply(lambda x: vectorizer.transform([x["title"] ]), axis =1)
-    relevance_with_values["doc_vec_body"] = relevance_with_values.apply(lambda x: vectorizer.transform([x["body"]]), axis =1)
-    relevance_with_values["cosine_title"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_title'], x['query_vec']), axis=1)
-    relevance_with_values["cosine_body"]  = relevance_with_values.apply(lambda x: cosine_similarity(x['doc_vec_body'], x['query_vec']), axis=1)
-    relevance_with_values["common_title"] = relevance_with_values.apply(lambda x: common_terms(x["title"], x["query"] ), axis =1)
-    relevance_with_values["common_body"] = relevance_with_values.apply(lambda x: common_terms(x["body"], x["query"] ), axis =1)
+    rv["query_vec"] = rv.apply(lambda x: vectorizer.transform([x["query"]]), axis =1)
+    rv["doc_vec_title"] = rv.apply(lambda x: vectorizer.transform([x["title"] ]), axis =1)
+    rv["doc_vec_body"] = rv.apply(lambda x: vectorizer.transform([x["body"]]), axis =1)
 
-    relevance_with_values["max_title_idf"] = relevance_with_values.apply(lambda x: np.max(x["doc_vec_title"]), axis =1)
-    relevance_with_values["max_pos_title_idf"] = relevance_with_values.apply(lambda x: np.argmax(x["doc_vec_title"]), axis =1)
-    relevance_with_values["sum_title_idf"] = relevance_with_values.apply(lambda x: np.sum(x["doc_vec_title"]), axis =1)
-    relevance_with_values["len_title_idf"] = relevance_with_values.apply(lambda x: text_length(x["title"]), axis =1)
-    relevance_with_values["norm_title_idf"] = np.divide(relevance_with_values["sum_title_idf"] ,relevance_with_values["len_title_idf"] )
+    '''  COS and COMMON '''
+    rv["cosine_title"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_title'], x['query_vec']), axis=1)
+    rv["cosine_body"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_body'], x['query_vec']), axis=1)
+    rv["common_title"] = rv.apply(lambda x: common_terms(x["title"], x["query"] ), axis =1)
+    rv["common_body"] = rv.apply(lambda x: common_terms(x["body"], x["query"] ), axis =1)
 
-    relevance_with_values["max_body_idf"] = relevance_with_values.apply(lambda x: np.max(x["doc_vec_body"]), axis =1)
-    relevance_with_values["max_pos_body_idf"] = relevance_with_values.apply(lambda x: np.argmax(x["doc_vec_body"]), axis =1)
-    relevance_with_values["sum_body_idf"] = relevance_with_values.apply(lambda x: np.sum(x["doc_vec_body"]), axis =1)
-    relevance_with_values["len_body_idf"] = relevance_with_values.apply(lambda x: text_length(x["body"]), axis =1)
-    relevance_with_values["norm_body_idf"] = np.divide(relevance_with_values["sum_body_idf"] ,relevance_with_values["len_body_idf"] )
 
-    relevance_with_values["max_query_idf"] = relevance_with_values.apply(lambda x: np.max(x["query_vec"]), axis =1)
-    relevance_with_values["max_pos_query_idf"] = relevance_with_values.apply(lambda x: np.argmax(x["query_vec"]), axis =1)
-    relevance_with_values["sum_query_idf"] = relevance_with_values.apply(lambda x: np.sum(x["query_vec"]), axis =1)
-    relevance_with_values["len_query_idf"] = relevance_with_values.apply(lambda x: text_length(x["query"]), axis =1)
-    relevance_with_values["norm_query_idf"] = np.divide(relevance_with_values["sum_query_idf"] ,relevance_with_values["len_query_idf"] )
-    ########################################################################################################################################
-    relevance_with_values["title_count"], relevance_with_values["title_max_pos"], relevance_with_values["title_max"], relevance_with_values["title_prob"],  relevance_with_values["title_sum"], \
-    relevance_with_values["query_title_max_pos"], relevance_with_values["query_title_max"], relevance_with_values["query_title_prob"], relevance_with_values["query_title_sum"] =  idf_sparce(relevance_with_values["doc_vec_title"], relevance_with_values["query_vec"])
-    relevance_with_values["body_count"], relevance_with_values["body_max_pos"], relevance_with_values["body_max"],  relevance_with_values["body_prob"], relevance_with_values["body_sum"], \
-    relevance_with_values["query_body_max_pos"], relevance_with_values["query_body_max"], relevance_with_values["query_body_prob"], relevance_with_values["query_body_sum"] =  idf_sparce(relevance_with_values["doc_vec_body"], relevance_with_values["query_vec"])
+    ''' IDF Extraction'''
+
+    rv["max_title_idf"] = rv.apply(lambda x: np.max(x["doc_vec_title"]), axis =1)
+    rv["max_pos_title_idf"] = rv.apply(lambda x: np.argmax(x["doc_vec_title"]), axis =1)
+    rv["sum_title_idf"] = rv.apply(lambda x: np.sum(x["doc_vec_title"]), axis =1)
+    rv["len_title_idf"] = rv.apply(lambda x: text_length(x["title"]), axis =1)
+    rv["norm_title_idf"] = np.divide(rv["sum_title_idf"] ,rv["len_title_idf"] )
+
+    rv["max_body_idf"] = rv.apply(lambda x: np.max(x["doc_vec_body"]), axis =1)
+    rv["max_pos_body_idf"] = rv.apply(lambda x: np.argmax(x["doc_vec_body"]), axis =1)
+    rv["sum_body_idf"] = rv.apply(lambda x: np.sum(x["doc_vec_body"]), axis =1)
+    rv["len_body_idf"] = rv.apply(lambda x: text_length(x["body"]), axis =1)
+    rv["norm_body_idf"] = np.divide(rv["sum_body_idf"] ,rv["len_body_idf"] )
+
+    rv["max_query_idf"] = rv.apply(lambda x: np.max(x["query_vec"]), axis =1)
+    rv["max_pos_query_idf"] = rv.apply(lambda x: np.argmax(x["query_vec"]), axis =1)
+    rv["sum_query_idf"] = rv.apply(lambda x: np.sum(x["query_vec"]), axis =1)
+    rv["len_query_idf"] = rv.apply(lambda x: text_length(x["query"]), axis =1)
+    rv["norm_query_idf"] = np.divide(rv["sum_query_idf"] ,rv["len_query_idf"] )
+
+
+    '''  Word 2V'''
+    rv["query_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["query"], w2v_model), axis=1)
+    rv["doc_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["title"], w2v_model), axis=1)
+    rv["body_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["body"], w2v_model), axis=1)
+
+
+    ''' Cos W2V'''
+    rv["cosine_title_w2v"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
+    rv["cosine_body_w2v"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
+    print(rv["cosine_body_w2v"])
+
+
+
 
 
     ''' Step 6. Defining the feature and label  for classification'''
 
 
 
-    X = relevance_with_values[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]
+    X = rv[ ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
         + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["norm_query_idf"] + ["len_query_idf"]
         + ["max_title_idf"]  + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"]
         + ["max_body_idf"]   + ["max_pos_body_idf"]  + ["sum_body_idf"]  + ["norm_body_idf"]  + ["len_title_idf"] ]
 
     #
-    # X = relevance_with_values[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]]
+    # X = rv[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]]
 
 
 
-    Y = [v for k, v in relevance_with_values["position"].items()]
+    Y = [v for k, v in rv["position"].items()]
 
 
     ''' Step 7. Splitting the data for validation'''
@@ -249,10 +246,10 @@ def create_model(all_documents_file, relevance_file,query_file):
     ''' Step 8. Classification and validation'''
     target_names = ['1', '2', '3','4']
     # clf = MultinomialNB().fit(X_train, y_train)
-    # clf = RandomForestClassifier().fit(X_train, y_train)
+    clf = RandomForestClassifier().fit(X_train, y_train)
 
 
-    clf = SVC().fit(X_train, y_train)
+    # clf = SVC().fit(X_train, y_train)
 
     print(classification_report(y_test,  clf.predict(X_test), target_names=target_names))
 
