@@ -12,6 +12,7 @@ from nltk import PorterStemmer
 from nltk.corpus import stopwords
 analyzer = CountVectorizer().build_analyzer()
 import scipy
+from sklearn.svm import SVC
 
 is_debug = False
 
@@ -226,11 +227,8 @@ def create_model(all_documents_file, relevance_file,query_file):
 
 
     ''' Step 6. Defining the feature and label  for classification'''
-    # X = relevance_with_values[ ["cosine_title"] + ["cosine_body"] + ["common_title"] + ["common_body"] \
-    # + ["query_title_max_pos"]+ ["query_title_max"]+ ["query_title_sum"] \
-    # + ["query_body_max_pos"] + ["query_body_max"] + ["query_body_sum"] \
-    # + ["title_count"] + ["title_max_pos"] +["title_max"] + ["title_sum"] \
-    # + ["body_count"] + ["body_max_pos"] +["body_max"] + ["body_sum"]]
+
+
 
     X = relevance_with_values[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]
         + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["norm_query_idf"] + ["len_query_idf"]
@@ -252,13 +250,8 @@ def create_model(all_documents_file, relevance_file,query_file):
     target_names = ['1', '2', '3','4']
     # clf = MultinomialNB().fit(X_train, y_train)
     # clf = RandomForestClassifier().fit(X_train, y_train)
-    from sklearn.svm import LinearSVC
-    from sklearn.svm import SVC
 
-    from sklearn.multiclass import OneVsRestClassifier
 
-    # clf = OneVsRestClassifier(LinearSVC()).fit(X_train, y_train)
-    # clf = LinearSVC().fit(X_train, y_train)
     clf = SVC().fit(X_train, y_train)
 
     print(classification_report(y_test,  clf.predict(X_test), target_names=target_names))
