@@ -97,21 +97,11 @@ def cosine_similarity(x,y, w2v=False):
     else:
         cos = cosine(x.toarray()[0], y.toarray()[0])
 
+
     if np.isfinite(cos):
         return cos
     return 0.0
 
-# def cosine_similarity_w2v(x, y):
-
-#
-# def idf_mul(X):
-#     total = 1.0
-#     for x in X:
-#         np.mul
-#         total *= x
-#
-#     print(total)
-#     return total
 
 def stemming(tokens):
     return (PorterStemmer().stem(token) for token in analyzer(tokens))
@@ -132,14 +122,26 @@ def idf_prob(doc_sparce):
 def convert_to_w2v(tokens, w2v):
     tokens = tokens.split(" ")
     pattern_vec = np.zeros(w2v.layer1_size)
-    n_word = 0
+    n_word = 1
     if len(tokens) > 1:
         for token in tokens:
             if token in w2v:
                 pattern_vec = np.add(pattern_vec, w2v[token.strip()])
                 n_word += 1
-                pattern_vec = np.divide(pattern_vec, n_word)
+    pattern_vec = np.divide(pattern_vec, n_word)
     return pattern_vec.tolist()
+
+# def convert_to_d2v(tokens, d2v):
+#     pattern_vec = np.zeros(d2v.layer1_size)
+#     tokens = tokens.split(" ")
+#     n_word = 1
+#     if len(tokens) > 1:
+#         for token in tokens:
+#             if token in d2v:
+#                 pattern_vec = np.add(pattern_vec, d2v.infer_vector(token))
+#                 n_word += 1
+#     return np.divide(pattern_vec, n_word)
+#     # np.array(d2v.infer_vector(tokens.split(" ")))
 
 
 
@@ -161,17 +163,26 @@ def create_model(all_documents_file, relevance_file,query_file):
 
     ''' Step 3. Creating a model for generating TF feature'''
 
-    vectorizer = TfidfVectorizer(min_df=0.0, max_df=1.0, stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
+    vectorizer = TfidfVectorizer( min_df=0.0, max_df=1.0, stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
+    # vectorizer = TfidfVectorizer(use_idf=True, sublinear_tf=True,smooth_idf=True, min_df=0.0, max_df=1.0, stop_words="english", lowercase=True, norm="l2", strip_accents='ascii')
     vectorizer = vectorizer.fit(rv["all_text"])
 
 
     ''' Word to Vec Model'''
-    # rv["all_tokens"] = rv.apply(lambda x: x["all_text"].split(" "), axis=1)
-    w2v_model = gensim.models.Word2Vec(rv["all_text"], min_count=1, workers=4)
+    w2v_model = gensim.models.Word2Vec( min_count=1, workers=4)
+    w2v_model.build_vocab(rv["all_text"])
+
+
+    # ''' Doc to Vec Model'''
+    # sentences = []
+    # for index, row in rv.iterrows():
+    #     sentences.append(LabeledSentence(row["all_text"].split(), ['SENT %s' % index]))
+    # d2v_model = gensim.models.Doc2Vec(sentences)
 
     ''' Step 4. Saving the model for TF features'''
     joblib.dump(vectorizer, 'resources/vectorizer.pkl')
-    joblib.dump(w2v_model, 'resources/w2v.pkl')
+    w2v_model.save('resources/w2v.model')
+    # d2v_model.save('resources/d2v.model')
 
     ''' Step 5. Converting query and title to vectors and finding cosine similarity of the vectors'''
     rv["query_vec"] = rv.apply(lambda x: vectorizer.transform([x["query"]]), axis =1)
@@ -183,7 +194,33 @@ def create_model(all_documents_file, relevance_file,query_file):
     rv["cosine_body"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_body'], x['query_vec']), axis=1)
     rv["common_title"] = rv.apply(lambda x: common_terms(x["title"], x["query"] ), axis =1)
     rv["common_body"] = rv.apply(lambda x: common_terms(x["body"], x["query"] ), axis =1)
-    # idf_prob
+
+    '''  Word 2V'''
+    rv["query_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["query"], w2v_model), axis=1)
+    rv["doc_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["title"], w2v_model), axis=1)
+    rv["body_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["body"], w2v_model), axis=1)
+
+    ''' Cos W2V'''
+    rv["cosine_title_w2v"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
+    rv["cosine_body_w2v"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
+
+
+
+
+
+
+    '''  Doc 2V'''
+    # rv["query_vec_d2v"] = rv.apply(lambda x: convert_to_d2v(x["query"], d2v_model), axis=1)
+    # rv["doc_vec_d2v"] = rv.apply(lambda x: convert_to_d2v(x["title"], d2v_model), axis=1)
+    # print(rv["doc_vec_d2v"] )
+    # rv["body_vec_d2v"] = rv.apply(lambda x: convert_to_d2v(x["body"], d2v_model), axis=1)
+
+    # ''' Cos W2V'''
+    # rv["cosine_title_w2v"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
+    # rv["cosine_body_w2v"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
+
+
+
 
     ''' IDF Extraction'''
     rv["max_query_idf"] = rv.apply(lambda x: np.max(x["query_vec"]), axis=1)
@@ -210,28 +247,10 @@ def create_model(all_documents_file, relevance_file,query_file):
 
 
 
-    '''  Word 2V'''
-    rv["query_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["query"], w2v_model), axis=1)
-    rv["doc_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["title"], w2v_model), axis=1)
-    rv["body_vec_w2v"] = rv.apply(lambda x: convert_to_w2v(x["body"], w2v_model), axis=1)
-
-
-    ''' Cos W2V'''
-    rv["cosine_title_w2v"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
-    rv["cosine_body_w2v"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
-
-
 
 
 
     ''' Step 6. Defining the feature and label  for classification'''
-
-    # X = rv[ ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
-    #     + ["max_query_idf"]  + ["max_pos_query_idf"] + ["sum_query_idf"] + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
-    #     + ["max_title_idf"]  + ["max_pos_title_idf"] + ["sum_title_idf"] + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
-    #     + ["max_body_idf"]   + ["max_pos_body_idf"]  + ["sum_body_idf"]  + ["norm_body_idf"]  + ["len_body_idf"]+ ["prob_body_idf"]]
-
-
     X = rv[ ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
         + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
         + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
