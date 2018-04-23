@@ -33,6 +33,55 @@ def load_models():
   Preferably implement the function in a different file and call from here. Make sure keep everything else the same.
 '''
 
+#
+# def evaluate_model(model, query, document):
+#     query = query['query']
+#     title = document['title']
+#     body = document['body']
+#     query_vec = model[0].transform([query])
+#     title_vec = model[0].transform([title])
+#     body_vec = model[0].transform([body])
+#
+#     cos_title = cosine_similarity(query_vec, title_vec)
+#     cos_body = cosine_similarity(query_vec, body_vec)
+#
+#     common_title = common_terms(title, query)
+#     common_body = common_terms(body, query)
+#
+#     # Query idf
+#     mq = np.max(query_vec)
+#     mqp = np.argmax(query_vec)
+#     lq = text_length(query)
+#     qs = np.sum(query_vec)
+#     qsn = qs / lq
+#
+#     # Title idf
+#     mt = np.max(title_vec)
+#     mtp = np.argmax(title_vec)
+#     lt = text_length(title)
+#     ts = np.sum(title_vec)
+#     tsn = ts / lt
+#
+#     # Body idf
+#     mb = np.max(body_vec)
+#     mbp = np.argmax(body_vec)
+#     lb = text_length(body)
+#     bs = np.sum(body_vec)
+#     bsn = bs / lb
+#
+#
+#     result = model[1].predict([[ cos_title, cos_body, common_title, common_body,
+#                                  mq, mqp, qs, qsn, lq,
+#                                  mt, mbp, bs, bsn, lb,
+#                                  mb, mbp, bs, bsn, lb]])
+#
+#
+#
+#
+#     # result = model[1].predict([[cos_title, common_title, cos_body, common_body]])
+#     return result[0],0.5
+
+
 
 def evaluate_model(model, query, document):
     query = query['query']
@@ -54,6 +103,7 @@ def evaluate_model(model, query, document):
     lq = text_length(query)
     qs = np.sum(query_vec)
     qsn = qs / lq
+    qp = idf_prob(query_vec)
 
     # Title idf
     mt = np.max(title_vec)
@@ -61,6 +111,7 @@ def evaluate_model(model, query, document):
     lt = text_length(title)
     ts = np.sum(title_vec)
     tsn = ts / lt
+    tp = idf_prob(title_vec)
 
     # Body idf
     mb = np.max(body_vec)
@@ -68,19 +119,22 @@ def evaluate_model(model, query, document):
     lb = text_length(body)
     bs = np.sum(body_vec)
     bsn = bs / lb
+    bp = idf_prob(body_vec)
 
 
-    result = model[1].predict([[ cos_title, cos_body, common_title, common_body,
-                                 mq, mqp, qs, qsn, lq,
-                                 mt, mbp, bs, bsn, lb,
-                                 mb, mbp, bs, bsn, lb]])
+    # result = model[1].predict([[ common_title, common_body,
+    #                              mq, mqp, qsn, lq, qp,
+    #                              mt, mbp, bsn, lb, tp,
+    #                              mb, mbp, bsn, lb, bp]])
 
-
+    result = model[1].predict([[
+                                 mq, mqp, qsn, lq, qp,
+                                 mt, mbp, bsn, lb, tp,
+                                 mb, mbp, bsn, lb, bp]])
 
 
     # result = model[1].predict([[cos_title, common_title, cos_body, common_body]])
     return result[0],0.5
-
 
 def common_terms(x,y):
     count = 0
@@ -131,19 +185,9 @@ def convert_to_w2v(tokens, w2v):
     pattern_vec = np.divide(pattern_vec, n_word)
     return pattern_vec.tolist()
 
-# def convert_to_d2v(tokens, d2v):
-#     pattern_vec = np.zeros(d2v.layer1_size)
-#     tokens = tokens.split(" ")
-#     n_word = 1
-#     if len(tokens) > 1:
-#         for token in tokens:
-#             if token in d2v:
-#                 pattern_vec = np.add(pattern_vec, d2v.infer_vector(token))
-#                 n_word += 1
-#     return np.divide(pattern_vec, n_word)
-#     # np.array(d2v.infer_vector(tokens.split(" ")))
 
-
+def cos_avg(x, y):
+    return (float(x) + float(y)) / 2.0
 
 
 def create_model(all_documents_file, relevance_file,query_file):
@@ -204,21 +248,9 @@ def create_model(all_documents_file, relevance_file,query_file):
     rv["cosine_title_w2v"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
     rv["cosine_body_w2v"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
 
-
-
-
-
-
-    '''  Doc 2V'''
-    # rv["query_vec_d2v"] = rv.apply(lambda x: convert_to_d2v(x["query"], d2v_model), axis=1)
-    # rv["doc_vec_d2v"] = rv.apply(lambda x: convert_to_d2v(x["title"], d2v_model), axis=1)
-    # print(rv["doc_vec_d2v"] )
-    # rv["body_vec_d2v"] = rv.apply(lambda x: convert_to_d2v(x["body"], d2v_model), axis=1)
-
-    # ''' Cos W2V'''
-    # rv["cosine_title_w2v"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
-    # rv["cosine_body_w2v"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_w2v'], x['query_vec_w2v'], w2v=True), axis=1)
-
+    ''' Cos AVG'''
+    rv["avg_cos_title"] = rv.apply(lambda x: cos_avg(x['cosine_title_w2v'], x['cosine_title']), axis=1)
+    rv["avg_cos_body"] = rv.apply(lambda x: cos_avg(x['cosine_body_w2v'], x['cosine_body']), axis=1)
 
 
 
@@ -251,11 +283,19 @@ def create_model(all_documents_file, relevance_file,query_file):
 
 
     ''' Step 6. Defining the feature and label  for classification'''
-    X = rv[ ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
-        + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+    # X = rv[ ["avg_cos_title"] + ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["avg_cos_body"]+ ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
+    #     + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+    #     + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
+    #     + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]]
+
+
+    X = rv[
+         ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
         + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
         + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]]
 
+
+    # X = rv[ ["common_title"] + ["common_body"]]
     #
     # X = rv[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]]
 
@@ -269,8 +309,10 @@ def create_model(all_documents_file, relevance_file,query_file):
 
     ''' Step 8. Classification and validation'''
     target_names = ['1', '2', '3','4']
+    from sklearn.svm import LinearSVC
     # clf = MultinomialNB().fit(X_train, y_train)
-    clf = RandomForestClassifier().fit(X_train, y_train)
+    # clf = RandomForestClassifier().fit(X_train, y_train)
+    clf = LinearSVC(random_state=0).fit(X_train, y_train)
 
 
     # clf = SVC().fit(X_train, y_train)
