@@ -2,6 +2,8 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfTransformer ,CountVectorizer, TfidfVectorizer
 from scipy.spatial.distance import cosine
 import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import cross_val_score
 from sklearn.ensemble import RandomForestClassifier
@@ -15,7 +17,8 @@ import scipy
 from sklearn.svm import SVC
 import gensim, logging
 from gensim.models.doc2vec import LabeledSentence
-
+from textblob import TextBlob
+from textblob.sentiments import NaiveBayesAnalyzer
 is_debug = False
 
 '''Please feel free to modify this function (load_models)
@@ -172,7 +175,12 @@ def idf_prob(doc_sparce):
         dp *= doc_idf
     return dp
 
-
+def one_hot(labels):
+    l = len(labels)
+    Y= np.zeros((l, 4))
+    for i in range(l):
+        Y[i][labels[i] - 1] = 1
+    return Y
 def convert_to_w2v(tokens, w2v):
     tokens = tokens.split(" ")
     pattern_vec = np.zeros(w2v.layer1_size)
@@ -186,8 +194,28 @@ def convert_to_w2v(tokens, w2v):
     return pattern_vec.tolist()
 
 
+def convert_to_blob(text):
+    opinion = TextBlob(text)
+    return opinion.sentiment
+
+
+def naiveBayes(text):
+    opinion = TextBlob(text, analyzer=NaiveBayesAnalyzer())
+    print(opinion)
+    print(opinion.sentiment)
+    exit()
+
+
 def cos_avg(x, y):
     return (float(x) + float(y)) / 2.0
+
+def split_tuples(tup):
+    p = []
+    s = []
+    for t in tup:
+        p.append(t[0])
+        s.append(t[1])
+    return p, s
 
 
 def create_model(all_documents_file, relevance_file,query_file):
@@ -231,7 +259,7 @@ def create_model(all_documents_file, relevance_file,query_file):
     ''' Step 5. Converting query and title to vectors and finding cosine similarity of the vectors'''
     rv["query_vec"] = rv.apply(lambda x: vectorizer.transform([x["query"]]), axis =1)
     rv["doc_vec_title"] = rv.apply(lambda x: vectorizer.transform([x["title"] ]), axis =1)
-    rv["doc_vec_body"] = rv.apply(lambda x: vectorizer.transform([x["body"]]), axis =1)
+    rv["doc_vec_body"] = rv.apply(lambda x: vectorizer.transform([ x["body"]]), axis =1)
 
     '''  COS and COMMON '''
     rv["cosine_title"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_title'], x['query_vec']), axis=1)
@@ -251,6 +279,40 @@ def create_model(all_documents_file, relevance_file,query_file):
     ''' Cos AVG'''
     rv["avg_cos_title"] = rv.apply(lambda x: cos_avg(x['cosine_title_w2v'], x['cosine_title']), axis=1)
     rv["avg_cos_body"] = rv.apply(lambda x: cos_avg(x['cosine_body_w2v'], x['cosine_body']), axis=1)
+
+
+    '''  Textblob'''
+    rv["query_vec_blob"] = rv.apply(lambda x: convert_to_blob(x["query"]), axis=1)
+    rv["doc_vec_blob"] = rv.apply(lambda x: convert_to_blob(x["title"]), axis=1)
+    rv["body_vec_blob"] = rv.apply(lambda x: convert_to_blob(x["body"]), axis=1)
+
+    '''Split tuples'''
+    rv["query_vec_blob_p"],rv["query_vec_blob_s"]=  split_tuples(rv["query_vec_blob"])
+    rv["doc_vec_blob_p"],rv["doc_vec_blob_s"]=  split_tuples(rv["doc_vec_blob"])
+    rv["body_vec_blob_p"],rv["body_vec_blob_s"]=  split_tuples(rv["body_vec_blob"])
+
+    '''Sentament cosine'''
+    rv["cosine_title_pblob"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_blob_p'], rv["query_vec_blob_p"], w2v=True), axis=1)
+    rv["cosine_title_sblob"]  = rv.apply(lambda x: cosine_similarity(x['doc_vec_blob_s'], rv["query_vec_blob_s"], w2v=True), axis=1)
+    rv["cosine_body_pblob"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_blob_p'], x['query_vec_blob_p'], w2v=True), axis=1)
+    rv["cosine_body_sblob"]  = rv.apply(lambda x: cosine_similarity(x['body_vec_blob_s'], x['query_vec_blob_p'], w2v=True), axis=1)
+
+
+
+    ''' W2V Data '''
+    rv["query_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["query_vec"]), axis=1)
+    rv["query_vec_w2v_max"] = rv.apply(lambda x: np.max(x["query_vec"]), axis=1)
+    rv["query_vec_w2v_min"] = rv.apply(lambda x: np.min(x["query_vec"]), axis=1)
+    rv["query_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["query_vec"]), axis=1)
+    rv["doc_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["doc_vec_w2v"]), axis=1)
+    rv["doc_vec_w2v_max"] = rv.apply(lambda x: np.max(x["doc_vec_w2v"]), axis=1)
+    rv["doc_vec_w2v_min"] = rv.apply(lambda x: np.min(x["doc_vec_w2v"]), axis=1)
+    rv["doc_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["doc_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["body_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_max"] = rv.apply(lambda x: np.max(x["body_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_min"] = rv.apply(lambda x: np.min(x["body_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["body_vec_w2v"]), axis=1)
+
 
 
 
@@ -283,26 +345,56 @@ def create_model(all_documents_file, relevance_file,query_file):
 
 
     ''' Step 6. Defining the feature and label  for classification'''
+    X = rv[ ["avg_cos_title"] + ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["avg_cos_body"]+ ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
+        + ["cosine_title_pblob"] + ["cosine_title_sblob"] + ["cosine_body_pblob"] + ["cosine_body_sblob"]
+        + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+        + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
+        + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]
+        + ["query_vec_w2v_pos"] + ["query_vec_w2v_max"]  + ["query_vec_w2v_min"] + ["query_vec_w2v_sum"]
+        +  ["doc_vec_w2v_pos"] + ["doc_vec_w2v_max"]  + ["doc_vec_w2v_min"] + ["doc_vec_w2v_sum"]
+        + ["body_vec_w2v_pos"] + ["body_vec_w2v_max"] + ["body_vec_w2v_min"] + ["body_vec_w2v_sum"]
+
+        ]
     # X = rv[ ["avg_cos_title"] + ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["avg_cos_body"]+ ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
-    #     + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+    #     + ["cosine_title_pblob"] + ["cosine_title_sblob"] + ["cosine_body_pblob"] + ["cosine_body_sblob"]
+    #     ]
+
+
+    # rv["title_vec_w2v_max"] = rv.apply(lambda x: np.max(x["query_vec"]), axis=1)
+    # rv["title_vec_w2v_min"] = rv.apply(lambda x: np.min(x["query_vec"]), axis=1)
+    # rv["doc_vec_w2v_max"] = rv.apply(lambda x: np.max(x["doc_vec_w2v"]), axis=1)
+    # rv["doc_vec_w2v_min"] = rv.apply(lambda x: np.min(x["doc_vec_w2v"]), axis=1)
+    # rv["body_vec_w2v_max"] = rv.apply(lambda x: np.max(x["body_vec_w2v"]), axis=1)
+    # rv["body_vec_w2v_min"]
+
+    from sklearn.preprocessing import normalize
+    # X = normalize(X)
+
+    # X = rv[
+    #      ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
     #     + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
     #     + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]]
-
-
-    X = rv[
-         ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
-        + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
-        + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]]
 
 
     # X = rv[ ["common_title"] + ["common_body"]]
     #
     # X = rv[ ["cosine_title"]+ ["common_title"] + ["cosine_body"] + ["common_body"]]
 
+    # print(rv["doc_vec_body"].shape)
+    # print(rv["doc_vec_body"][0].shape)
+    # # print([x for x in rv["doc_vec_body"]])
+    # # X = rv["doc_vec_body"].tomatrix
+    # X = np.zeros((len(rv["doc_vec_body"]), rv["doc_vec_body"][0].shape[1]))
+    # for i in range(len(rv["doc_vec_body"])):
+    #     doc = scipy.sparse.coo_matrix(rv["doc_vec_body"][i])
+    #     for doc_word, doc_idf in zip(doc.col, doc.data):
+    #         X[i][doc_word] = doc_idf
+    #
+    #
+    # print(X)
 
-
-    Y = [v for k, v in rv["position"].items()]
-
+    # Y = one_hot([v for k, v in rv["position"].items()])
+    Y = rv["position"]
 
     ''' Step 7. Splitting the data for validation'''
     X_train, X_test, y_train, y_test = train_test_split(    X, Y, test_size = 0.33, random_state = 42)
@@ -311,8 +403,21 @@ def create_model(all_documents_file, relevance_file,query_file):
     target_names = ['1', '2', '3','4']
     from sklearn.svm import LinearSVC
     # clf = MultinomialNB().fit(X_train, y_train)
+    # clf = OneVsRestClassifier(MultinomialNB()).fit(X_train, y_train)
+    # clf = MultinomialNB().fit(X_train, y_train)
+
+    # clf = LogisticRegression().fit(X_train, y_train)
+    # LogisticRegression(C=1.0, class_weight=None, dual=False, fit_intercept=True,
+    #                    intercept_scaling=1, penalty='l2', random_state=None, tol=0.0001)
+    # clf = RandomForestClassifier(class_weight= [{0: 1, 1: 50}, {0: 1, 1: 25}, {0: 1, 1: 10}, {0: 1, 1: 5}] ).fit(X_train, y_train)
     # clf = RandomForestClassifier().fit(X_train, y_train)
-    clf = LinearSVC(random_state=0).fit(X_train, y_train)
+    clf = RandomForestClassifier(class_weight="balanced").fit(X_train, y_train)
+    # clf = LinearSVC(random_state=0).fit(X_train, y_train)
+
+    from sklearn.svm import LinearSVC
+    # clf = OneVsRestClassifier(SVC(random_state=0)).fit(X_train, y_train)
+
+
 
 
     # clf = SVC().fit(X_train, y_train)
