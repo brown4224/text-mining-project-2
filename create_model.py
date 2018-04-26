@@ -299,23 +299,6 @@ def create_model(all_documents_file, relevance_file,query_file):
 
 
 
-    ''' W2V Data '''
-    rv["query_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["query_vec"]), axis=1)
-    rv["query_vec_w2v_max"] = rv.apply(lambda x: np.max(x["query_vec"]), axis=1)
-    rv["query_vec_w2v_min"] = rv.apply(lambda x: np.min(x["query_vec"]), axis=1)
-    rv["query_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["query_vec"]), axis=1)
-    rv["doc_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["doc_vec_w2v"]), axis=1)
-    rv["doc_vec_w2v_max"] = rv.apply(lambda x: np.max(x["doc_vec_w2v"]), axis=1)
-    rv["doc_vec_w2v_min"] = rv.apply(lambda x: np.min(x["doc_vec_w2v"]), axis=1)
-    rv["doc_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["doc_vec_w2v"]), axis=1)
-    rv["body_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["body_vec_w2v"]), axis=1)
-    rv["body_vec_w2v_max"] = rv.apply(lambda x: np.max(x["body_vec_w2v"]), axis=1)
-    rv["body_vec_w2v_min"] = rv.apply(lambda x: np.min(x["body_vec_w2v"]), axis=1)
-    rv["body_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["body_vec_w2v"]), axis=1)
-
-
-
-
     ''' IDF Extraction'''
     rv["max_query_idf"] = rv.apply(lambda x: np.max(x["query_vec"]), axis=1)
     rv["max_pos_query_idf"] = rv.apply(lambda x: np.argmax(x["query_vec"]), axis=1)
@@ -339,6 +322,29 @@ def create_model(all_documents_file, relevance_file,query_file):
     rv["prob_body_idf"] = rv.apply(lambda x: idf_prob(x["doc_vec_body"]), axis =1)
 
 
+    ''' W2V Data '''
+    rv["query_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["query_vec"]), axis=1)
+    rv["query_vec_w2v_max"] = rv.apply(lambda x: np.max(x["query_vec"]), axis=1)
+    rv["query_vec_w2v_min"] = rv.apply(lambda x: np.min(x["query_vec"]), axis=1)
+    rv["query_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["query_vec"]), axis=1)
+    rv["query_vec_w2v_norm"] = np.divide(rv["query_vec_w2v_sum"] ,rv["len_title_idf"] )
+
+
+    rv["doc_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["doc_vec_w2v"]), axis=1)
+    rv["doc_vec_w2v_max"] = rv.apply(lambda x: np.max(x["doc_vec_w2v"]), axis=1)
+    rv["doc_vec_w2v_min"] = rv.apply(lambda x: np.min(x["doc_vec_w2v"]), axis=1)
+    rv["doc_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["doc_vec_w2v"]), axis=1)
+    rv["doc_vec_w2v_norm"] = np.divide(rv["doc_vec_w2v_sum"] ,rv["len_title_idf"] )
+
+
+    rv["body_vec_w2v_pos"] = rv.apply(lambda x: np.argmax(x["body_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_max"] = rv.apply(lambda x: np.max(x["body_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_min"] = rv.apply(lambda x: np.min(x["body_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_sum"] = rv.apply(lambda x: np.sum(x["body_vec_w2v"]), axis=1)
+    rv["body_vec_w2v_norm"] = np.divide(rv["doc_vec_w2v_sum"] ,rv["len_title_idf"] )
+
+
+
 
 
 
@@ -350,11 +356,53 @@ def create_model(all_documents_file, relevance_file,query_file):
         + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
         + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
         + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]
-        + ["query_vec_w2v_pos"] + ["query_vec_w2v_max"]  + ["query_vec_w2v_min"] + ["query_vec_w2v_sum"]
-        +  ["doc_vec_w2v_pos"] + ["doc_vec_w2v_max"]  + ["doc_vec_w2v_min"] + ["doc_vec_w2v_sum"]
-        + ["body_vec_w2v_pos"] + ["body_vec_w2v_max"] + ["body_vec_w2v_min"] + ["body_vec_w2v_sum"]
+        + ["query_vec_w2v_pos"] + ["query_vec_w2v_max"]   + ["query_vec_w2v_norm"] + ["query_vec_w2v_sum"]
+        + ["doc_vec_w2v_pos"] + ["doc_vec_w2v_max"] +   ["doc_vec_w2v_norm"] + ["doc_vec_w2v_sum"]
+        + ["body_vec_w2v_pos"] + ["body_vec_w2v_max"] + ["body_vec_w2v_norm"] + ["body_vec_w2v_sum"]
+        + ["query_vec_blob_p"] + ["query_vec_blob_s"]
+        + ['doc_vec_blob_p'] + ['doc_vec_blob_s']
+        + ['body_vec_blob_p'] + ['body_vec_blob_s']
 
         ]
+
+
+
+
+
+    # X = rv[ ["avg_cos_title"] + ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["avg_cos_body"]+ ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
+    #     + ["cosine_title_pblob"] + ["cosine_title_sblob"] + ["cosine_body_pblob"] + ["cosine_body_sblob"]
+    #     + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+    #     + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
+    #     + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]
+    #     + ["query_vec_w2v_pos"] + ["query_vec_w2v_max"] + ["query_vec_w2v_min"]  + ["query_vec_w2v_norm"] + ["query_vec_w2v_sum"]
+    #     + ["doc_vec_w2v_pos"] + ["doc_vec_w2v_max"] + ["doc_vec_w2v_min"]   + ["doc_vec_w2v_norm"] + ["doc_vec_w2v_sum"]
+    #     + ["body_vec_w2v_pos"] + ["body_vec_w2v_max"] + ["body_vec_w2v_min"] + ["body_vec_w2v_norm"] + ["body_vec_w2v_sum"]
+    #     + ["query_vec_blob_p"] + ["query_vec_blob_s"]
+    #     + ['doc_vec_blob_p'] + ['doc_vec_blob_s']
+    #     + ['body_vec_blob_p'] + ['body_vec_blob_s']
+    #
+    #     ]
+
+    # X = rv[ ["avg_cos_title"] + ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["avg_cos_body"]+ ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
+    #     + ["cosine_title_pblob"] + ["cosine_title_sblob"] + ["cosine_body_pblob"] + ["cosine_body_sblob"]
+    #     + ["max_query_idf"]  + ["max_pos_query_idf"]  + ["norm_query_idf"] + ["len_query_idf"] + ["prob_query_idf"]
+    #     + ["max_title_idf"]  + ["max_pos_title_idf"]  + ["norm_title_idf"] + ["len_title_idf"] + ["prob_title_idf"]
+    #     + ["max_body_idf"]   + ["max_pos_body_idf"]   + ["norm_body_idf"]  + ["len_body_idf"]  + ["prob_body_idf"]
+    #     + ["query_vec_w2v_pos"] + ["query_vec_w2v_max"]  + ["query_vec_w2v_min"] + ["query_vec_w2v_sum"]
+    #     + ["doc_vec_w2v_pos"] + ["doc_vec_w2v_max"]  + ["doc_vec_w2v_min"] + ["doc_vec_w2v_sum"]
+    #     + ["body_vec_w2v_pos"] + ["body_vec_w2v_max"] + ["body_vec_w2v_min"] + ["body_vec_w2v_sum"]
+    #
+    #     ]
+
+
+
+
+
+
+
+
+
+
     # X = rv[ ["avg_cos_title"] + ["cosine_title"]+ ["cosine_title_w2v"]+["common_title"] + ["avg_cos_body"]+ ["cosine_body"] + ["cosine_body_w2v"] + ["common_body"]
     #     + ["cosine_title_pblob"] + ["cosine_title_sblob"] + ["cosine_body_pblob"] + ["cosine_body_sblob"]
     #     ]
@@ -393,41 +441,53 @@ def create_model(all_documents_file, relevance_file,query_file):
     #
     # print(X)
 
-    # Y = one_hot([v for k, v in rv["position"].items()])
-    Y = rv["position"]
+    Y = one_hot([v for k, v in rv["position"].items()])
+
 
     ''' Step 7. Splitting the data for validation'''
     X_train, X_test, y_train, y_test = train_test_split(    X, Y, test_size = 0.33, random_state = 42)
 
     ''' Step 8. Classification and validation'''
     target_names = ['1', '2', '3','4']
-    from sklearn.svm import LinearSVC
-    # clf = MultinomialNB().fit(X_train, y_train)
-    # clf = OneVsRestClassifier(MultinomialNB()).fit(X_train, y_train)
-    # clf = MultinomialNB().fit(X_train, y_train)
 
-    # clf = LogisticRegression().fit(X_train, y_train)
-    # LogisticRegression(C=1.0, class_weight=None, dual=False, fit_intercept=True,
-    #                    intercept_scaling=1, penalty='l2', random_state=None, tol=0.0001)
-    # clf = RandomForestClassifier(class_weight= [{0: 1, 1: 50}, {0: 1, 1: 25}, {0: 1, 1: 10}, {0: 1, 1: 5}] ).fit(X_train, y_train)
-    # clf = RandomForestClassifier().fit(X_train, y_train)
-    clf = RandomForestClassifier(class_weight="balanced").fit(X_train, y_train)
-    # clf = LinearSVC(random_state=0).fit(X_train, y_train)
 
-    from sklearn.svm import LinearSVC
-    # clf = OneVsRestClassifier(SVC(random_state=0)).fit(X_train, y_train)
+
+    clf = RandomForestClassifier().fit(X_train, y_train)
 
 
 
 
-    # clf = SVC().fit(X_train, y_train)
+
+
+
+
 
     print(classification_report(y_test,  clf.predict(X_test), target_names=target_names))
 
     ''' Step 9. Saving the data '''
     joblib.dump(clf, 'resources/classifier.pkl')
 
+#  Close but not using
+    # Y = [v for k, v in rv["position"].items()]
+    # Y = rv["position"]
+    # clf = LogisticRegression().fit(X_train, y_train)
+    # LogisticRegression(C=1.0, class_weight=None, dual=False, fit_intercept=True,
+    #                    intercept_scaling=1, penalty='l2', random_state=None, tol=0.0001)
+    # clf = RandomForestClassifier(class_weight="balanced").fit(X_train, y_train)
+    from sklearn.svm import LinearSVC
 
+    # clf = RandomForestClassifier(class_weight= [{0: 1, 1: 50}, {0: 1, 1: 25}, {0: 1, 1: 10}, {0: 1, 1: 5}] ).fit(X_train, y_train)
+
+    # clf = LinearSVC(random_state=0).fit(X_train, y_train)
+
+# NOT USING
+    # clf = MultinomialNB().fit(X_train, y_train)
+    # clf = OneVsRestClassifier(MultinomialNB()).fit(X_train, y_train)
+    # clf = MultinomialNB().fit(X_train, y_train)
+    # clf = RandomForestClassifier().fit(X_train, y_train)
+    from sklearn.svm import LinearSVC
+    # clf = OneVsRestClassifier(LinearSVC(random_state=0)).fit(X_train, y_train)
+    # clf = SVC().fit(X_train, y_train)
 
 
 if __name__ == '__main__':
